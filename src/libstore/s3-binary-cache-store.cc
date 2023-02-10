@@ -18,10 +18,12 @@
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/threading/Executor.h>
 #include <aws/s3/S3Client.h>
+#include <aws/s3/model/CreateMultipartUploadRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
+#include <aws/s3/model/StorageClass.h>
 #include <aws/transfer/TransferManager.h>
 
 using namespace Aws::Transfer;
@@ -203,6 +205,7 @@ struct S3BinaryCacheStoreConfig : virtual BinaryCacheStoreConfig
         (StoreConfig*) this, false, "multipart-upload", "whether to use multi-part uploads"};
     const Setting<uint64_t> bufferSize{
         (StoreConfig*) this, 5 * 1024 * 1024, "buffer-size", "size (in bytes) of each part in multi-part uploads"};
+    const Setting<std::string> s3StorageClass{(StoreConfig*) this, "", "storage-class", "S3 storage class to use when writing new objects"};
 
     const std::string name() override { return "S3 Binary Cache Store"; }
 };
@@ -214,6 +217,8 @@ struct S3BinaryCacheStoreImpl : virtual S3BinaryCacheStoreConfig, public virtual
     Stats stats;
 
     S3Helper s3Helper;
+
+    std::optional<Aws::S3::Model::StorageClass> storageClass;
 
     S3BinaryCacheStoreImpl(
         const std::string & uriScheme,
@@ -227,8 +232,12 @@ struct S3BinaryCacheStoreImpl : virtual S3BinaryCacheStoreConfig, public virtual
         , S3BinaryCacheStore(params)
         , bucketName(bucketName)
         , s3Helper(profile, region, scheme, endpoint)
+        , storageClass()
     {
         diskCache = getNarInfoDiskCache();
+        if (!s3StorageClass.get().empty())
+            storageClass =
+                Aws::S3::Model::StorageClassMapper::GetStorageClassForName(s3StorageClass);
     }
 
     std::string getUri() override
@@ -313,6 +322,11 @@ struct S3BinaryCacheStoreImpl : virtual S3BinaryCacheStoreConfig, public virtual
                 transferConfig.s3Client = s3Helper.client;
                 transferConfig.bufferSize = bufferSize;
 
+                if (storageClass.has_value()) {
+                    transferConfig.putObjectTemplate.SetStorageClass(*storageClass);
+                    transferConfig.createMultipartUploadTemplate.SetStorageClass(*storageClass);
+                }
+
                 transferConfig.uploadProgressCallback =
                     [](const TransferManager *transferManager,
                         const std::shared_ptr<const TransferHandle>
@@ -364,6 +378,9 @@ struct S3BinaryCacheStoreImpl : virtual S3BinaryCacheStoreConfig, public virtual
 
             if (contentEncoding != "")
                 request.SetContentEncoding(contentEncoding);
+
+            if (storageClass.has_value())
+                request.SetStorageClass(*storageClass);
 
             request.SetBody(istream);
 
