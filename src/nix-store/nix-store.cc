@@ -1013,11 +1013,15 @@ static int main_nix_store(int argc, char * * argv)
         Strings opFlags, opArgs;
         Operation op = 0;
 
+        std::string manualStoreLocation;
+
         parseCmdLine(argc, argv, [&](Strings::iterator & arg, const Strings::iterator & end) {
             Operation oldOp = op;
 
             if (*arg == "--help")
                 showManPage("nix-store");
+            else if (*arg == "--force-store")
+                manualStoreLocation = getArg(*arg, arg, end);
             else if (*arg == "--version")
                 op = opVersion;
             else if (*arg == "--realise" || *arg == "--realize" || *arg == "-r")
@@ -1090,8 +1094,12 @@ static int main_nix_store(int argc, char * * argv)
 
         if (!op) throw UsageError("no operation specified");
 
-        if (op != opDump && op != opRestore) /* !!! hack */
-            store = openStore();
+        if (op != opDump && op != opRestore) /* !!! hack */ {
+            if (manualStoreLocation.empty())
+                store = openStore();
+            else
+                store = openStore(manualStoreLocation);
+        }
 
         op(std::move(opFlags), std::move(opArgs));
 
