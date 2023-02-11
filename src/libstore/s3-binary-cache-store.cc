@@ -205,7 +205,7 @@ struct S3BinaryCacheStoreConfig : virtual BinaryCacheStoreConfig
         (StoreConfig*) this, false, "multipart-upload", "whether to use multi-part uploads"};
     const Setting<uint64_t> bufferSize{
         (StoreConfig*) this, 5 * 1024 * 1024, "buffer-size", "size (in bytes) of each part in multi-part uploads"};
-    const Setting<std::string> s3StorageClass{(StoreConfig*) this, "", "storage-class", "S3 storage class to use when writing new objects"};
+    const Setting<std::string> s3StorageClass{(StoreConfig*) this, "INTELLIGENT_TIERING", "storage-class", "S3 storage class to use when writing new objects"};
 
     const std::string name() override { return "S3 Binary Cache Store"; }
 };
